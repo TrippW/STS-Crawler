@@ -126,9 +126,10 @@ class STSRelicReader:
         if res:
             self.cur_relic = name
             self.max_match = 1
-        elif name in self.relics:
+        elif name in self.fake_relic_name_map.keys():
             self.cur_relic = self.get_real_relic_name(name)
             self.max_match = 1
+            res = True
         else:
             res = self.check_if_similar(name)
         return res
