@@ -272,8 +272,8 @@ class RedditBot:
         log(reply)
 
         ###DEBUG TEXT###
-        global last_updated
-        log(f'last time sts_relics was run: {last_updated}')
+        global time_at_run
+        log(f'last time sts_relics was run: {time_at_run}')
         log(f'last time ignores were updated: {self.last_update}')
         for reader in [ self.relicReader ]:
             log(f'last time {reader.name} reader was updated: {reader.last_update}')
@@ -297,6 +297,7 @@ class RedditBot:
             
 checked_ids = []
 can_post = True
+time_at_run = datetime.datetime.utcnow()
 
 if __name__=='__main__':
     def relic_parse(string):
