@@ -6,55 +6,68 @@ import os
 from urllib3.exceptions import InsecureRequestWarning
 from strsimpy.jaro_winkler import JaroWinkler
 
+RELIC_IGNORE = ['Relics']
+RELIC_LINKS = [
+    'https://slay-the-spire.fandom.com/wiki/Category:Relic',
+    'https://slay-the-spire.fandom.com/wiki/Category:Beta_Relic'
+]
 
-IGNORE = ['Relics']
+def log(text):
+    """helper to log to file and print at the same time"""
+    with open('sts_crawler.log', 'a') as logger:
+        log_text = text.replace('\n', '\n\t')
+        logger.write(f'\n{str(datetime.datetime.utcnow())}: {log_text}')
+    print(text)
 
-class STSRelicReader:
-    def __init__(self, relics=None, real_relic_names=None, fake_relic_name_map=None):
-        self.last_relic_update = datetime.datetime.utcnow()
-        self.relics = set()
-        self.real_relic_names = set()
-        self.fake_relic_name_map = dict()
-        if relics:
-            self.relics = relics
-        if real_relic_names:
-            self.real_relic_names = real_relic_names
-        if fake_relic_name_map:
-            self.fake_relic_name_map = fake_relic_name_map
-        self.cur_relic = None
-        self.max_match = 0
-        self.max_relic_name_words = 0
-        self.strcmp = JaroWinkler()
+class STSWikiReader:
+    #for matching relics
+    base_set = set()
+    real_names = set()
+    fake_name_map = dict()
+    cur = None
+    max_name_word_cnt = 0
 
-        self.update_relic_set()
+    #For matching strings to items
+    max_match = 0
+    strcmp = JaroWinkler()
 
-    def _get_relic_name(self, string):
-        title_start = string.index('title=')+7
-        title_end = string.index('"', title_start)
-        if string.count('(', title_start) > 0:
-            title_end = min(string.index('(', title_start)-1, title_end)
-        return string[title_start:title_end]
+    def __init__(self, name, links, tag_match, ignore_list, parse):
+        self.last_update = datetime.datetime.utcnow()
+        self.name = name
+        self.links = links
+        self.tag_match = tag_match
+        self.ignore_list = ignore_list
+        self.parse = parse
 
-    def format_relic_name(self, name):
+        self.update_info()
+
+    def format_name(self, name):
+        """Used to get a clean, uniform name with pesky characters removed"""
         return self._rm_symbol(self._rm_squote(self._rm_hyph(name.lower())))
 
     def _rm_symbol(self, name):
-        return name.replace('?', '').replace(',', '').replace('.', '').replace('!', '')
+        """removes odd characters that should never be in a obj name"""
+        return name.replace('?', '').replace(',', '').replace('.', '').replace('!', '').replace('(', '').replace(')', '')
 
     def _rm_squote(self, name):
-        return name.replace("'", '')
+        """removes single quotes"""
+        return name.replace("'", '').replace('’', '')
 
     def _lower(self, name):
+        """exists to pass along to alternative names func"""
         return name.lower()
 
     def _rm_hyph(self, name):
+        """swaps typical joining characters with spaces"""
         return name.replace('-',' ').replace('_',' ')
 
     def _rm_beta(self, name):
+        """removes beta tag (possible error from wiki)"""
         return name.replace('_beta', '').replace('_Beta', '').replace('Beta', '').replace('beta', '')
 
     def _gen_alternative_names(self, name):
-        names = set([])
+        """creates a massive list of possible mistypes for a specific name, used as an aid for matching user input"""
+        names = set()
         actions = [self._rm_symbol, self._rm_squote, self._lower, self._rm_hyph, self._rm_beta]
         for outer in range(len(actions)):
             temp_name = name
@@ -63,71 +76,89 @@ class STSRelicReader:
                 names.add(temp_name)
         return list(names)
 
-    def update_relic_set(self):
-        print('Updating relics...')
-        links = [
-            'https://slay-the-spire.fandom.com/wiki/Category:Relic',
-            'https://slay-the-spire.fandom.com/wiki/Category:Beta_Relic'
-        ]
-        global IGNORE
-        for link in links:
+    def update_info(self):
+        """goes to the web and finds information provided by the links"""
+        log(f'Updating {self.name}s...')
+        seen_list = set()
+
+        #fetch data from links and update object with most recent info
+        for link in self.links:
             res = requests.get(link, verify=False)
             for t in res.text.split('\n'):
-                if 'category-page__member-link' in t:
-                    cur_name = self._get_relic_name(t)
-                    if ((not cur_name in self.relics)
-                        and (not cur_name in IGNORE)
+                if self.tag_match in t:
+                    cur_name = self.parse(t)
+                    seen_list.add(cur_name)
+                    #if we haven't seen it before, add it to our look up list.
+                    if ((not cur_name in self.base_set)
+                        and (not cur_name in self.ignore_list)
                         and (not cur_name.startswith('Category:'))):
-                        self.relics.add(cur_name)
-                        self.real_relic_names.add(cur_name)
-                        self.fake_relic_name_map[cur_name] = cur_name
-                        self.max_relic_name_words = max(self.max_relic_name_words, len(cur_name.split(' ')))
+                        self.base_set.add(cur_name)
+                        self.real_names.add(cur_name)
+                        self.fake_name_map[cur_name] = cur_name
+                        self.max_name_word_cnt = max(self.max_name_word_cnt, len(cur_name.split(' ')))
                         
                         for new_name in self._gen_alternative_names(cur_name):
-                            self.relics.add(new_name)
-                            self.fake_relic_name_map[new_name] = cur_name
-            self.last_relic_update = datetime.datetime.utcnow()
-        print('Found {} relics'.format(len(self.real_relic_names)))
+                            self.base_set.add(new_name)
+                            self.fake_name_map[new_name] = cur_name
 
 
+        #handle deleted data from wiki
+        recalc_max_name_word_cnt = False
+        for cur_name in self.real_names - seen_list:
+            for new_name in self._gen_alternative_names(cur_name):
+                self.base_set.remove(new_name)
+                del self.fake_name_map[new_name]
 
-    def get_real_relic_name(self, name):
-        return self.fake_relic_name_map[name]
+            if not recalc_max_name_word_cnt and self.max_name_word_cnt == len(cur_name.split(' ')):
+                recalc_max_name_word_cnt = True
+            self.base_set.remove(cur_name)
+            self.real_names.remove(cur_name)
+            del self.fake_name_map[cur_name]
 
-    def clean_name(self, name):
-        name = name.lower()
-        
+        if recalc_max_name_word_cnt:
+            self.max_name_word_cnt = 0
+            for cur_name in self.real_names:
+                self.max_name_word_cnt = max(self.max_name_word_cnt, len(cur_name.split(' ')))
+
+        #finalize update    
+        self.last_update = datetime.datetime.utcnow()
+        log('Found {} {}s'.format(len(self.real_names), self.name))
+
+    def get_real_name(self, name):
+        return self.fake_name_map[name]
 
     def check_if_similar(self, name):
-        name = self.format_relic_name(name)
+        """uses similarity check to see if the passed in name may match any of our found or generated names"""
+        name = self.format_name(name)
         split_name = name.split(' ')
         word_thresh = 0.9**len(split_name)
         self.max_match = 0
-        self.cur_relic = None
-        for rel_name in self.relics:
-            split_rel_name  = rel_name.split(' ')
-            if len(split_name) == len(split_rel_name):
+        self.cur = None
+        for item_name in self.base_set:
+            split_item_name  = item_name.split(' ')
+            if len(split_name) == len(split_item_name):
                 word_check = 1
                 for i in range(len(split_name)):
-                    word_check *= self.strcmp.similarity(split_name[i], split_rel_name[i])
-                    word_check *= self.strcmp.similarity(split_name[i][::-1], split_rel_name[i][::-1])
+                    word_check *= self.strcmp.similarity(split_name[i], split_item_name[i])
+                    word_check *= self.strcmp.similarity(split_name[i][::-1], split_item_name[i][::-1])
 
                 if word_check > self.max_match:
                     self.max_match = word_check
                     if word_check >= word_thresh:
-                        self.cur_relic = self.get_real_relic_name(rel_name)
-        return self.cur_relic != None
+                        self.cur = self.get_real_name(item_name)
+        return self.cur != None
 
-    def check_if_relic(self, name, update=True):
-        if update and datetime.datetime.utcnow() - self.last_relic_update > datetime.timedelta(days=15):
-            self.update_relic_set()
+    def check_if_exists(self, name, update=True):
+        """Used to check if a name is a perfect match for any found names or is close enough to call a match"""
+        if update and datetime.datetime.utcnow() - self.last_update > datetime.timedelta(days=15):
+            self.update_info()
             
-        res = name in self.real_relic_names
+        res = name in self.real_names
         if res:
-            self.cur_relic = name
+            self.cur = name
             self.max_match = 1
-        elif name in self.fake_relic_name_map.keys():
-            self.cur_relic = self.get_real_relic_name(name)
+        elif name in self.fake_name_map.keys():
+            self.cur = self.get_real_name(name)
             self.max_match = 1
             res = True
         else:
@@ -135,58 +166,77 @@ class STSRelicReader:
         return res
 
 class RedditBot:
+    last_update=None
     def __init__(self, relicReader):
         self.REDDIT = self.login()
         self.SUBREDDIT = self.REDDIT.subreddit('slaythespire')
         self.relicReader = relicReader
         self.NEW_LINE = '\n\n'
-        self.REPLY_TEMPLATE = 'I am {:0.1f}% confident you mentioned [[{}]] in your post.'
+        self.FIRST_REPLY_TEMPLATE = 'I am {:0.1f}% confident you mentioned {} in your post.'
+        self.REPLY_TEMPLATE = 'I am also {:0.1f}% confident you mentioned {}.'
                               
-        self.END_TEXT = 'Let me call the bot for you.\n\n' + '-'*50 + \
-                        self.NEW_LINE +'I am a bot response, but I am using my creators account. ' + \
-                        'Please reply to me if I got something wrong so he can fix it.'
+        self.END_TEXT = 'Let me call the bot for you.' + \
+                        self.NEW_LINE + '-'*50 + \
+                        self.NEW_LINE + "I am a bot response, but I am using my creator's account. " + \
+                            'Please reply to me if I got something wrong so he can fix it.' + \
+                        self.NEW_LINE + '[Source Code](https://github.com/TrippW/STS-Crawler)'
 
     def login(self):
         """
         log in to reddit
         uses a praw.ini file to hold sensitive information
         """
-
         return praw.Reddit(redirect_uri='http://localhost:8080', \
                            user_agent='STS Scraper by /u/devTripp')
 
     def start(self):
-        global can_post
+        """starts the bot, runs forever"""
         self.posted = False
         while True:
-            print('Starting up...')
+            log('Starting up...')
             try:
+                if False and datetime.datetime.utcnow() - self.last_update  > datetime.timedelta(days=1):
+                    pass#self.update_ignore_files()
                 for post in self.SUBREDDIT.stream.submissions():
                     self.process_submission(post)
+
             except Exception as e:
-                print(e)
-                #raise e
+                log(e)
+
+    def update_ignore_files(self):
+        """finds ignore files for our reader and pulls data into the readers. Used to update ignored strings during runtime"""
+        for reader in self.readers:
+            fname = f'{reader.name}.ignore'
+            if os.path.exists(fname):
+                with open(fname, 'r') as f:
+                    reader.ignore_list = [k.strip() for k in f.readlines()]
+            else:
+                reader.ignore_list = []
+
+        self.last_update = datetime.datetime.utcnow()
 
     def check_all_word_combos(self, title, on_true):
-        if datetime.datetime.utcnow() - self.relicReader.last_relic_update > datetime.timedelta(days=15):
-            self.relicReader.update_relic_set()
+        """breaks the sentence/title into words/groups of words, and tries to match it with data in a reader"""
+        
+        if datetime.datetime.utcnow() - self.relicReader.last_update > datetime.timedelta(days=15):
+            self.relicReader.update_info()
         words = title.split(' ')
         mentions = dict()
         found = False
         for word_pos in range(len(words)):
-            for offset in range(1, self.relicReader.max_relic_name_words+1):
+            for offset in range(1, self.relicReader.max_name_word_cnt+1):
                 if word_pos + offset > len(words):
                     break
                 phrase = ' '.join(words[word_pos:word_pos+offset])
-                if self.relicReader.check_if_relic(phrase, False):
+                if self.relicReader.check_if_exists(phrase, False):
                     if not found:
-                        print(title)
-                    cur_relic = self.relicReader.cur_relic
-                    print('Relic Mention: {} | {:0.2f}'.format(cur_relic, self.relicReader.max_match))
-                    if cur_relic in mentions.keys():
-                        mentions[cur_relic] = max(self.relicReader.max_match*100, mentions[cur_relic])
+                        log(title)
+                    cur = self.relicReader.cur
+                    print('Relic Mention: {} | {:0.2f}'.format(cur, self.relicReader.max_match))
+                    if cur in mentions.keys():
+                        mentions[cur] = max(self.relicReader.max_match*100, mentions[cur])
                     else:
-                        mentions[cur_relic] = self.relicReader.max_match*100
+                        mentions[cur] = self.relicReader.max_match*100
                     found = True
 
         if found:
@@ -195,15 +245,44 @@ class RedditBot:
         return found
 
     def post_reply(self, items):
+        """formats and posts the data to reddit"""                
         reply = ""
+        grouped_items = dict()
+        #group by percent
         for key in items:
-            reply += self.REPLY_TEMPLATE.format(items[key], key) + self.NEW_LINE
+            k = int(items[key]*10)
+            if k not in grouped_items.keys():
+                grouped_items[k] = [key]
+            else:
+                grouped_items[k].append(key)
+        template = self.FIRST_REPLY_TEMPLATE
+        for key in sorted(grouped_items, reverse=True):
+            values = grouped_items[key]
+            if len(values) == 1:
+                reply += template.format(key/10, f'[[{values[0]}]]') + self.NEW_LINE
+            else:
+                item_list = ', '.join([f'[[{k}]]' for k in values[:-1]])
+                #oxford comma
+                if len(values) != 2:
+                       item_list += ','
+                item_list += ' and ' + f'[[{values[-1]}]]'
+                reply += template.format(key/10, item_list) + self.NEW_LINE
+            template = self.REPLY_TEMPLATE
+
+        log(reply)
+
+        ###DEBUG TEXT###
+        global last_updated
+        log(f'last time sts_relics was run: {last_updated}')
+        log(f'last time ignores were updated: {self.last_update}')
+        for reader in [ self.relicReader ]:
+            log(f'last time {reader.name} reader was updated: {reader.last_update}')
+        ###END DEBUG###
         reply += self.END_TEXT
-        
-        print(reply)
         self.post.reply(reply)
 
     def process_submission(self, post):
+        """handles input of new posts to the subreddit"""
         global checked_ids
         title = post.title
         self.post = post
@@ -215,20 +294,37 @@ class RedditBot:
             checked_ids.append(post.id)
             with open('checked.txt', 'a') as f:
                 f.write('\n'+post.id)
-
-            
             
 checked_ids = []
 can_post = True
 
 if __name__=='__main__':
-    if os.path.exists('checked.txt'):
-        with open('checked.txt', 'r') as f:
-            checked_ids = [k.replace('\n','') for k in f.readlines()]
-    
+    def relic_parse(string):
+        title_start = string.index('title=')+7
+        title_end = string.index('"', title_start)
+        if string.count('(', title_start) > 0:
+            title_end = min(string.index('(', title_start)-1, title_end)
+        return string[title_start:title_end]
+
+    def get_data(filename):
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                return [k.strip() for k in f.readlines()]
+
+    #Read from files            
+    checked_ids = get_data('checked.txt')
+    RELIC_IGNORE = get_data('relic.ignore')
+
+    #Setup and run bot
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-    RelicReader = STSRelicReader()
+    RelicReader = STSWikiReader('relic', RELIC_LINKS, 'category-page__member-link', RELIC_IGNORE, relic_parse)
     redditbot = RedditBot(RelicReader)
     redditbot.start()
-    
-"""document.getElementsByClassName("category-page__member-link").forEach((a)=>console.log(a.text))"""
+
+    ###FOR TESTING#######################
+    #
+    #class tempPost:
+    #    def __init__(self, title, _id):
+    #        self.title = title
+    #        self.id = _id
+    #redditbot.process_submission(tempPost('Mummified Hand, Amplify, Astrolabe: Creative AI)', '1'))
