@@ -369,7 +369,7 @@ if __name__ == '__main__':
                                CARD_IGNORE,
                                card_parse)
     redditbot = RedditBot([RelicReader, CardReader])
-    #redditbot.start()
+    redditbot.start()
 
     # ##FOR TESTING#######################
     #
