@@ -1,3 +1,8 @@
+"""This unit handles reading in data from the slayTheSpire wiki,
+    creating a string comparison tool,
+    reading posts from the slay the spire subreddit
+    scanning the post titles for item mentions and replying with data
+"""
 import requests
 import praw
 import prawcore
@@ -20,7 +25,9 @@ def log(text):
     print(text)
 
 class STSWikiReader:
-    #for matching relics
+    """Reads data from website, creates a lookup map of item names, and does
+        soft string matching to find possible mentions of the item parsed
+    """
     base_set = set()
     real_names = set()
     fake_name_map = dict()
@@ -101,7 +108,6 @@ class STSWikiReader:
                             self.base_set.add(new_name)
                             self.fake_name_map[new_name] = cur_name
 
-
         #handle deleted data from wiki
         recalc_max_name_word_cnt = False
         for cur_name in self.real_names - seen_list:
@@ -124,9 +130,6 @@ class STSWikiReader:
         self.last_update = datetime.datetime.utcnow()
         log('Found {} {}s'.format(len(self.real_names), self.name))
 
-    def get_real_name(self, name):
-        return self.fake_name_map[name]
-
     def check_if_similar(self, name):
         """uses similarity check to see if the passed in name may match any of our found or generated names"""
         name = self.format_name(name)
@@ -145,7 +148,7 @@ class STSWikiReader:
                 if word_check > self.max_match:
                     self.max_match = word_check
                     if word_check >= word_thresh:
-                        self.cur = self.get_real_name(item_name)
+                        self.cur = self.fake_name_map[item_name]
         return self.cur != None
 
     def check_if_exists(self, name, update=True):
@@ -158,7 +161,7 @@ class STSWikiReader:
             self.cur = name
             self.max_match = 1
         elif name in self.fake_name_map.keys():
-            self.cur = self.get_real_name(name)
+            self.cur = self.fake_name_map[name]
             self.max_match = 1
             res = True
         else:
@@ -167,10 +170,10 @@ class STSWikiReader:
 
 class RedditBot:
     last_update=None
-    def __init__(self, relicReader):
+    def __init__(self, readers):
         self.REDDIT = self.login()
         self.SUBREDDIT = self.REDDIT.subreddit('slaythespire')
-        self.relicReader = relicReader
+        self.readers = readers
         self.NEW_LINE = '\n\n'
         self.FIRST_REPLY_TEMPLATE = 'I am {:0.1f}% confident you mentioned {} in your post.'
         self.REPLY_TEMPLATE = 'I am also {:0.1f}% confident you mentioned {}.'
@@ -191,7 +194,6 @@ class RedditBot:
 
     def start(self):
         """starts the bot, runs forever"""
-        self.posted = False
         while True:
             log('Starting up...')
             try:
@@ -217,27 +219,28 @@ class RedditBot:
 
     def check_all_word_combos(self, title, on_true):
         """breaks the sentence/title into words/groups of words, and tries to match it with data in a reader"""
-        
-        if datetime.datetime.utcnow() - self.relicReader.last_update > datetime.timedelta(days=15):
-            self.relicReader.update_info()
-        words = title.split(' ')
-        mentions = dict()
-        found = False
-        for word_pos in range(len(words)):
-            for offset in range(1, self.relicReader.max_name_word_cnt+1):
-                if word_pos + offset > len(words):
-                    break
-                phrase = ' '.join(words[word_pos:word_pos+offset])
-                if self.relicReader.check_if_exists(phrase, False):
-                    if not found:
-                        log(title)
-                    cur = self.relicReader.cur
-                    print('Relic Mention: {} | {:0.2f}'.format(cur, self.relicReader.max_match))
-                    if cur in mentions.keys():
-                        mentions[cur] = max(self.relicReader.max_match*100, mentions[cur])
-                    else:
-                        mentions[cur] = self.relicReader.max_match*100
-                    found = True
+
+        for reader in self.readers:
+            if datetime.datetime.utcnow() - reader.last_update > datetime.timedelta(days=15):
+                reader.update_info()
+            words = title.split(' ')
+            mentions = dict()
+            found = False
+            for word_pos in range(len(words)):
+                for offset in range(1, reader.max_name_word_cnt+1):
+                    if word_pos + offset > len(words):
+                        break
+                    phrase = ' '.join(words[word_pos:word_pos+offset])
+                    if reader.check_if_exists(phrase, False):
+                        if not found:
+                            log(title)
+                        cur = reader.cur
+                        print('Relic Mention: {} | {:0.2f}'.format(cur, rreader.max_match))
+                        if cur in mentions.keys():
+                            mentions[cur] = max(reader.max_match*100, mentions[cur])
+                        else:
+                            mentions[cur] = reader.max_match*100
+                        found = True
 
         if found:
             on_true(mentions)
@@ -275,7 +278,7 @@ class RedditBot:
         global time_at_run
         log(f'last time sts_relics was run: {time_at_run}')
         log(f'last time ignores were updated: {self.last_update}')
-        for reader in [ self.relicReader ]:
+        for reader in self.readers:
             log(f'last time {reader.name} reader was updated: {reader.last_update}')
         ###END DEBUG###
         reply += self.END_TEXT
@@ -319,7 +322,7 @@ if __name__=='__main__':
     #Setup and run bot
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
     RelicReader = STSWikiReader('relic', RELIC_LINKS, 'category-page__member-link', RELIC_IGNORE, relic_parse)
-    redditbot = RedditBot(RelicReader)
+    redditbot = RedditBot([ RelicReader ])
     redditbot.start()
 
     ###FOR TESTING#######################
