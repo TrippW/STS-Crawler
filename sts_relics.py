@@ -103,9 +103,9 @@ class STSWikiReader:
                     cur_name = self.parse(t)
                     seen_list.add(cur_name)
                     # if we haven't seen it before, add it to our look up list.
-                    if (cur_name not in self.base_set)
-                    and (cur_name not in self.ignore_list)
-                    and (not cur_name.startswith('Category:')):
+                    if (cur_name not in self.base_set) \
+                        and (cur_name not in self.ignore_list) \
+                            and (not cur_name.startswith('Category:')):
                         self.base_set.add(cur_name)
                         self.real_names.add(cur_name)
                         self.fake_name_map[cur_name] = cur_name
@@ -123,8 +123,8 @@ class STSWikiReader:
                 self.base_set.remove(new_name)
                 del self.fake_name_map[new_name]
 
-            if not recalc_max_name_word_cnt
-            and self.max_name_word_cnt == len(cur_name.split(' ')):
+            if not recalc_max_name_word_cnt \
+                    and self.max_name_word_cnt == len(cur_name.split(' ')):
                 recalc_max_name_word_cnt = True
             self.base_set.remove(cur_name)
             self.real_names.remove(cur_name)
@@ -169,8 +169,8 @@ class STSWikiReader:
         """Used to check if a name is a perfect match for any found
             names or is close enough to call a match
         """
-        if update and datetime.datetime.utcnow() - self.last_update
-        > datetime.timedelta(days=15):
+        if update and datetime.datetime.utcnow() - self.last_update \
+                > datetime.timedelta(days=15):
             self.update_info()
 
         res = name in self.real_names
@@ -219,8 +219,8 @@ class RedditBot:
         while True:
             log('Starting up...')
             try:
-                if False and datetime.datetime.utcnow() - self.last_update
-                > datetime.timedelta(days=1):
+                if False and datetime.datetime.utcnow() - self.last_update \
+                        > datetime.timedelta(days=1):
                     self.update_ignore_files()
                 for post in self.SUBREDDIT.stream.submissions():
                     self.process_submission(post)
@@ -248,8 +248,8 @@ class RedditBot:
         """
 
         for reader in self.readers:
-            if datetime.datetime.utcnow() - reader.last_update
-            > datetime.timedelta(days=15):
+            if datetime.datetime.utcnow() - reader.last_update \
+                    > datetime.timedelta(days=15):
                 reader.update_info()
             words = title.split(' ')
             mentions = dict()
@@ -264,7 +264,7 @@ class RedditBot:
                             log(title)
                         cur = reader.cur
                         print('Relic Mention: {} | {:0.2f}'.format(
-                            cur, rreader.max_match))
+                            cur, reader.max_match))
                         if cur in mentions.keys():
                             mentions[cur] = max(reader.max_match*100,
                                                 mentions[cur])
