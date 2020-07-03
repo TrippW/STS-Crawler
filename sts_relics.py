@@ -256,14 +256,13 @@ class RedditBot:
                     > datetime.timedelta(days=15):
                 reader.update_info()
             words = title.split(' ')
-            found = False
             for word_pos in range(len(words)):
                 for offset in range(1, reader.max_name_word_cnt+1):
                     if word_pos + offset > len(words):
                         break
                     phrase = ' '.join(words[word_pos:word_pos+offset])
                     if reader.check_if_exists(phrase, False):
-                        if not found:
+                        if not mentions:
                             log(title)
                         cur = reader.cur
                         print('{} Mention: {} | {:0.2f}'.format(
@@ -273,10 +272,9 @@ class RedditBot:
                                                 mentions[cur])
                         else:
                             mentions[cur] = reader.max_match*100
-                        found = True
-        if found:
+        if mentions:
             on_true(mentions)
-        return found
+        return len(mentions) > 0
 
     def post_reply(self, items):
         """formats and posts the data to reddit"""
