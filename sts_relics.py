@@ -8,6 +8,7 @@ import praw
 import prawcore
 import datetime
 import os
+from bs4 import BeautifulSoup as soup
 from urllib3.exceptions import InsecureRequestWarning
 from strsimpy.jaro_winkler import JaroWinkler
 
@@ -30,23 +31,20 @@ class STSWikiReader:
     """Reads data from website, creates a lookup map of item names, and does
         soft string matching to find possible mentions of the item parsed
     """
-    base_set = set()
-    real_names = set()
-    fake_name_map = dict()
-    cur = None
-    max_name_word_cnt = 0
-
-    # For matching strings to items
-    max_match = 0
     strcmp = JaroWinkler()
 
-    def __init__(self, name, links, tag_match, ignore_list, parse):
+    def __init__(self, name, links, ignore_list, parse_names):
         self.last_update = datetime.datetime.utcnow()
         self.name = name
         self.links = links
-        self.tag_match = tag_match
         self.ignore_list = ignore_list
-        self.parse = parse
+        self.parse_names = parse_names
+        self.base_set = set()
+        self.real_names = set()
+        self.fake_name_map = dict()
+        self.cur = None
+        self.max_name_word_cnt = 0
+        self.max_match = 0
 
         self.update_info()
 
@@ -57,7 +55,8 @@ class STSWikiReader:
     def _rm_symbol(self, name):
         """removes odd characters that should never be in a obj name"""
         return name.replace('?', '').replace(',', '').replace('.', '') \
-            .replace('!', '').replace('(', '').replace(')', '')
+            .replace('!', '').replace('(', '').replace(')', '') \
+            .replace(':', '')
 
     def _rm_squote(self, name):
         """removes single quotes"""
@@ -98,23 +97,23 @@ class STSWikiReader:
         # fetch data from links and update object with most recent info
         for link in self.links:
             res = requests.get(link, verify=False)
-            for t in res.text.split('\n'):
-                if self.tag_match in t:
-                    cur_name = self.parse(t)
-                    seen_list.add(cur_name)
-                    # if we haven't seen it before, add it to our look up list.
-                    if (cur_name not in self.base_set) \
-                        and (cur_name not in self.ignore_list) \
-                            and (not cur_name.startswith('Category:')):
-                        self.base_set.add(cur_name)
-                        self.real_names.add(cur_name)
-                        self.fake_name_map[cur_name] = cur_name
-                        self.max_name_word_cnt = max(self.max_name_word_cnt,
-                                                     len(cur_name.split(' ')))
+            for cur_name in self.parse_names(
+                    soup(res.text, features="html.parser")):
+                if cur_name in self.ignore_list:
+                    continue
+                seen_list.add(cur_name)
+                # if we haven't seen it before, add it to our look up list.
+                if (cur_name not in self.base_set) \
+                        and (not cur_name.startswith('Category:')):
+                    self.base_set.add(cur_name)
+                    self.real_names.add(cur_name)
+                    self.fake_name_map[cur_name] = cur_name
+                    self.max_name_word_cnt = max(self.max_name_word_cnt,
+                                                 len(cur_name.split(' ')))
 
-                        for new_name in self._gen_alternative_names(cur_name):
-                            self.base_set.add(new_name)
-                            self.fake_name_map[new_name] = cur_name
+                    for new_name in self._gen_alternative_names(cur_name):
+                        self.base_set.add(new_name)
+                        self.fake_name_map[new_name] = cur_name
 
         # handle deleted data from wiki
         recalc_max_name_word_cnt = False
@@ -138,7 +137,7 @@ class STSWikiReader:
 
         # finalize update
         self.last_update = datetime.datetime.utcnow()
-        log('Found {} {}s'.format(len(self.real_names), self.name))
+        log(f'Found {len(self.real_names)} {self.name}s')
 
     def check_if_similar(self, name):
         """uses similarity check to see if the passed in name may match
@@ -233,12 +232,16 @@ class RedditBot:
             Used to update ignored strings during runtime
         """
         for reader in self.readers:
-            fname = f'{reader.name}.ignore'
+            f_ignore_name = f'{reader.name}.ignore'
+            f_links_name = f'{reader.name}.link'
             if os.path.exists(fname):
-                with open(fname, 'r') as f:
+                with open(f_ignore_name, 'r') as f:
                     reader.ignore_list = [k.strip() for k in f.readlines()]
+                with open(f_link_name, 'r') as f:
+                    reader.links = [k.strip() for k in f.readlines()]
             else:
                 reader.ignore_list = []
+                reader.links = []
 
         self.last_update = datetime.datetime.utcnow()
 
@@ -247,12 +250,12 @@ class RedditBot:
             to match it with data in a reader
         """
 
+        mentions = dict()
         for reader in self.readers:
             if datetime.datetime.utcnow() - reader.last_update \
                     > datetime.timedelta(days=15):
                 reader.update_info()
             words = title.split(' ')
-            mentions = dict()
             found = False
             for word_pos in range(len(words)):
                 for offset in range(1, reader.max_name_word_cnt+1):
@@ -263,8 +266,8 @@ class RedditBot:
                         if not found:
                             log(title)
                         cur = reader.cur
-                        print('Relic Mention: {} | {:0.2f}'.format(
-                            cur, reader.max_match))
+                        print('{} Mention: {} | {:0.2f}'.format(
+                            reader.name, cur, reader.max_match))
                         if cur in mentions.keys():
                             mentions[cur] = max(reader.max_match*100,
                                                 mentions[cur])
@@ -309,7 +312,7 @@ class RedditBot:
         log(f'last time ignores were updated: {self.last_update}')
         for reader in self.readers:
             log(f'last time {reader.name} reader was updated:' +
-                ' {reader.last_update}')
+                f' {reader.last_update}')
         # ## END DEBUG# ##
         reply += self.END_TEXT
         self.post.reply(reply)
@@ -322,7 +325,7 @@ class RedditBot:
 
         title = str(title).encode('utf-8', errors='ignore').decode('utf-8')
         if (post.id not in checked_ids) and 'Daily Discussion' not in title:
-            print('checking {}'.format(post.id))
+            print(f'checking {post.id}')
             self.check_all_word_combos(title, self.post_reply)
             checked_ids.append(post.id)
             with open('checked.txt', 'a') as f:
@@ -332,14 +335,16 @@ class RedditBot:
 checked_ids = []
 can_post = True
 time_at_run = datetime.datetime.utcnow()
+bs_text = None
 
 if __name__ == '__main__':
-    def relic_parse(string):
-        title_start = string.index('title=') + 7
-        title_end = string.index('"', title_start)
-        if string.count('(', title_start) > 0:
-            title_end = min(string.index('(', title_start)-1, title_end)
-        return string[title_start:title_end]
+    def relic_parse(page_soup):
+        return [a.text for a in page_soup.find_all(
+            class_='category-page__member-link')]
+
+    def card_parse(page_soup):
+        return [row.find_next('a').text for row in
+                page_soup.find('table').find_all('tr')]
 
     def get_data(filename):
         if os.path.exists(filename):
@@ -349,16 +354,22 @@ if __name__ == '__main__':
     # Read from files
     checked_ids = get_data('checked.txt')
     RELIC_IGNORE = get_data('relic.ignore')
+    RELIC_LINKS = get_data('relic.link')
+    CARD_IGNORE = get_data('card.ignore')
+    CARD_LINKS = get_data('card.link')
 
     # Setup and run bot
     requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
     RelicReader = STSWikiReader('relic',
                                 RELIC_LINKS,
-                                'category-page__member-link',
                                 RELIC_IGNORE,
                                 relic_parse)
-    redditbot = RedditBot([RelicReader])
-    redditbot.start()
+    CardReader = STSWikiReader('card',
+                               CARD_LINKS,
+                               CARD_IGNORE,
+                               card_parse)
+    redditbot = RedditBot([RelicReader, CardReader])
+    #redditbot.start()
 
     # ##FOR TESTING#######################
     #
