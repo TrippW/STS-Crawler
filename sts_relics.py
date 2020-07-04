@@ -75,13 +75,17 @@ class STSWikiReader:
         return name.replace('_beta', '').replace('_Beta', '') \
             .replace('Beta', '').replace('beta', '')
 
+    def _append_s(self, name):
+        """makes things plural"""
+        return f'{name}s'
+
     def _gen_alternative_names(self, name):
         """creates a massive list of possible mistypes for a
             specific name, used as an aid for matching user input
         """
         names = set()
         actions = [self._rm_symbol, self._rm_squote, self._lower,
-                   self._rm_hyph, self._rm_beta]
+                   self._rm_hyph, self._rm_beta, self._append_s]
         for outer in range(len(actions)):
             temp_name = name
             for inner in range(len(actions) - outer):
