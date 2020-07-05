@@ -176,6 +176,11 @@ class STSWikiReader:
                 > datetime.timedelta(days=15):
             self.update_info()
 
+        if name in self.ignore_list:
+            self.cur = None
+            self.max_match = 0
+            return False
+
         res = name in self.real_names
         if res:
             self.cur = name
