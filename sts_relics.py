@@ -21,7 +21,7 @@ RELIC_LINKS = [
 
 def log(text):
     """helper to log to file and print at the same time"""
-    with open('sts_crawler.log', 'a') as logger:
+    with open('sts_crawler.log', 'a', encoding='utf-8') as logger:
         log_text = text.replace('\n', '\n\t')
         logger.write(f'\n{str(datetime.datetime.utcnow())}: {log_text}')
     print(text)
