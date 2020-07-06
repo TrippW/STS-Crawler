@@ -245,7 +245,8 @@ class RedditBot:
             f_links_name = f'{reader.name}.link'
             if os.path.exists(fname):
                 with open(f_ignore_name, 'r') as f:
-                    reader.ignore_list = [k.strip().lower() for k in f.readlines()]
+                    reader.ignore_list = [k.strip().lower()
+                                          for k in f.readlines()]
                 with open(f_link_name, 'r') as f:
                     reader.links = [k.strip() for k in f.readlines()]
             else:
@@ -356,13 +357,13 @@ if __name__ == '__main__':
     def get_data(filename):
         if os.path.exists(filename):
             with open(filename, 'r') as f:
-                return [k.strip().lower() for k in f.readlines()]
+                return [k.strip() for k in f.readlines()]
 
     # Read from files
     checked_ids = get_data('checked.txt')
-    RELIC_IGNORE = get_data('relic.ignore')
+    RELIC_IGNORE = [i.lower() for i in get_data('relic.ignore')]
     RELIC_LINKS = get_data('relic.link')
-    CARD_IGNORE = get_data('card.ignore')
+    CARD_IGNORE = [i.lower() for i in get_data('card.ignore')]
     CARD_LINKS = get_data('card.link')
 
     # Setup and run bot
