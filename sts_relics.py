@@ -103,7 +103,7 @@ class STSWikiReader:
             res = requests.get(link, verify=False)
             for cur_name in self.parse_names(
                     soup(res.text, features="html.parser")):
-                if cur_name in self.ignore_list:
+                if cur_name.lower() in self.ignore_list:
                     continue
                 seen_list.add(cur_name)
                 # if we haven't seen it before, add it to our look up list.
@@ -176,7 +176,7 @@ class STSWikiReader:
                 > datetime.timedelta(days=15):
             self.update_info()
 
-        if name in self.ignore_list:
+        if name.lower() in self.ignore_list:
             self.cur = None
             self.max_match = 0
             return False
@@ -245,7 +245,7 @@ class RedditBot:
             f_links_name = f'{reader.name}.link'
             if os.path.exists(fname):
                 with open(f_ignore_name, 'r') as f:
-                    reader.ignore_list = [k.strip() for k in f.readlines()]
+                    reader.ignore_list = [k.strip().lower() for k in f.readlines()]
                 with open(f_link_name, 'r') as f:
                     reader.links = [k.strip() for k in f.readlines()]
             else:
@@ -356,7 +356,7 @@ if __name__ == '__main__':
     def get_data(filename):
         if os.path.exists(filename):
             with open(filename, 'r') as f:
-                return [k.strip() for k in f.readlines()]
+                return [k.strip().lower() for k in f.readlines()]
 
     # Read from files
     checked_ids = get_data('checked.txt')
