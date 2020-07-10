@@ -116,8 +116,9 @@ class STSWikiReader:
                                                  len(cur_name.split(' ')))
 
                     for new_name in self._gen_alternative_names(cur_name):
-                        self.base_set.add(new_name)
-                        self.fake_name_map[new_name] = cur_name
+                        if new_name.strip():
+                            self.base_set.add(new_name)
+                            self.fake_name_map[new_name] = cur_name
 
         # handle deleted data from wiki
         recalc_max_name_word_cnt = False
@@ -265,7 +266,7 @@ class RedditBot:
             if datetime.datetime.utcnow() - reader.last_update \
                     > datetime.timedelta(days=15):
                 reader.update_info()
-            words = title.split(' ')
+            words = title.replace('/', ' ').strip().split(' ')
             for word_pos in range(len(words)):
                 for offset in range(1, reader.max_name_word_cnt+1):
                     if word_pos + offset > len(words):
