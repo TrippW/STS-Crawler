@@ -266,7 +266,7 @@ class RedditBot:
             if datetime.datetime.utcnow() - reader.last_update \
                     > datetime.timedelta(days=15):
                 reader.update_info()
-            words = title.replace('/', ' ').strip().split(' ')
+            words = reader.format_name(title.replace('/', ' ').strip()).split(' ')
             for word_pos in range(len(words)):
                 for offset in range(1, reader.max_name_word_cnt+1):
                     if word_pos + offset > len(words):
