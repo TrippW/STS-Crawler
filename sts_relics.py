@@ -266,23 +266,38 @@ class RedditBot:
             if datetime.datetime.utcnow() - reader.last_update \
                     > datetime.timedelta(days=15):
                 reader.update_info()
-            words = reader.format_name(title.replace('/', ' ').strip()).split(' ')
-            for word_pos in range(len(words)):
-                for offset in range(1, reader.max_name_word_cnt+1):
-                    if word_pos + offset > len(words):
-                        break
-                    phrase = ' '.join(words[word_pos:word_pos+offset])
+                
+        words = reader.format_name(title.replace('/', ' ').strip()).split(' ')
+        for word_pos in range(len(words)):
+            cur=None
+            best=0
+            match_type=None
+            for offset in range(reader.max_name_word_cnt, 0, -1):
+                if word_pos + offset > len(words):
+                    print('should continue', word_pos, offset, len(words))
+                    continue
+                phrase = ' '.join(words[word_pos:word_pos+offset])
+                for reader in self.readers:
                     if reader.check_if_exists(phrase, False):
-                        if not mentions:
-                            log(title)
-                        cur = reader.cur
-                        print('{} Mention: {} | {:0.2f}'.format(
-                            reader.name, cur, reader.max_match))
-                        if cur in mentions.keys():
-                            mentions[cur] = max(reader.max_match*100,
-                                                mentions[cur])
-                        else:
-                            mentions[cur] = reader.max_match*100
+                        if reader.max_match > best:
+                            cur = reader.cur
+                            best = reader.max_match
+                            match_type = reader.name
+                            if best == 1:
+                                break
+                if best == 1:
+                    break
+            if cur is not None:
+                if not mentions:
+                    log(title)
+                print('{} Mention: {} | {:0.2f}'.format(
+                    match_type, cur, best))
+                if cur in mentions.keys():
+                    mentions[cur] = max(best*100,
+                                        mentions[cur])
+                else:
+                    mentions[cur] = best*100
+
         if mentions:
             on_true(mentions)
         return len(mentions) > 0
