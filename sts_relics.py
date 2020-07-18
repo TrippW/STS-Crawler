@@ -274,7 +274,6 @@ class RedditBot:
             match_type=None
             for offset in range(reader.max_name_word_cnt, 0, -1):
                 if word_pos + offset > len(words):
-                    print('should continue', word_pos, offset, len(words))
                     continue
                 phrase = ' '.join(words[word_pos:word_pos+offset])
                 for reader in self.readers:
