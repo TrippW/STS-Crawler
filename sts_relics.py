@@ -235,7 +235,8 @@ class RedditBot:
                     self.process_submission(post)
 
             except Exception as e:
-                log(e)
+                log(str(e))
+                sleep(60)
 
     def update_ignore_files(self):
         """finds ignore files for our reader and pulls data into the readers.
@@ -267,11 +268,16 @@ class RedditBot:
                     > datetime.timedelta(days=15):
                 reader.update_info()
                 
+        skip=0
         words = reader.format_name(title.replace('/', ' ').strip()).split(' ')
         for word_pos in range(len(words)):
+            if skip:
+                skip -= 1
+                continue
             cur=None
             best=0
             match_type=None
+            match_len=0
             for offset in range(reader.max_name_word_cnt, 0, -1):
                 if word_pos + offset > len(words):
                     continue
@@ -282,6 +288,7 @@ class RedditBot:
                             cur = reader.cur
                             best = reader.max_match
                             match_type = reader.name
+                            match_len = offset + 1
                             if best == 1:
                                 break
                 if best == 1:
@@ -296,6 +303,7 @@ class RedditBot:
                                         mentions[cur])
                 else:
                     mentions[cur] = best*100
+                skip = match_len-1
 
         if mentions:
             on_true(mentions)
@@ -402,3 +410,4 @@ if __name__ == '__main__':
     #        self.id = _id
     # redditbot.process_submission(tempPost(
     #    'Mummified Hand, Amplify, Astrolabe: Creative AI)', '1'))
+    #    'I have a perfected strike poggers', '1'))
