@@ -86,6 +86,10 @@ class STSWikiReader:
         names = set()
         actions = [self._rm_symbol, self._rm_squote, self._lower,
                    self._rm_hyph, self._rm_beta, self._append_s]
+        # Weird edge case for beta tag on wiki vs beta the card
+        if name.lower().strip() == 'beta':
+            actions.remove(self._rm_beta)
+
         for outer in range(len(actions)):
             temp_name = name
             for inner in range(len(actions) - outer):
@@ -267,17 +271,18 @@ class RedditBot:
             if datetime.datetime.utcnow() - reader.last_update \
                     > datetime.timedelta(days=15):
                 reader.update_info()
-                
-        skip=0
-        words = reader.format_name(title.replace('/', ' ').strip()).split(' ')
+
+        skip = 0
+        words = list(filter(None, reader.format_name(
+            title.replace('/', ' ').strip()).split(' ')))
         for word_pos in range(len(words)):
             if skip:
                 skip -= 1
                 continue
-            cur=None
-            best=0
-            match_type=None
-            match_len=0
+            cur = None
+            best = 0
+            match_type = None
+            match_len = 0
             for offset in range(reader.max_name_word_cnt, 0, -1):
                 if word_pos + offset > len(words):
                     continue
@@ -288,7 +293,7 @@ class RedditBot:
                             cur = reader.cur
                             best = reader.max_match
                             match_type = reader.name
-                            match_len = offset + 1
+                            match_len = len(phrase)
                             if best == 1:
                                 break
                 if best == 1:
@@ -409,5 +414,4 @@ if __name__ == '__main__':
     #        self.title = title
     #        self.id = _id
     # redditbot.process_submission(tempPost(
-    #    'Mummified Hand, Amplify, Astrolabe: Creative AI)', '1'))
-    #    'I have a perfected strike poggers', '1'))
+    #    'My greatest Slay the Spire pro-play so far /s', '2'))
