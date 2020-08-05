@@ -8,6 +8,7 @@ import praw
 import prawcore
 import datetime
 import os
+from time import sleep
 from bs4 import BeautifulSoup as soup
 from urllib3.exceptions import InsecureRequestWarning
 from strsimpy.jaro_winkler import JaroWinkler
@@ -293,7 +294,7 @@ class RedditBot:
                             cur = reader.cur
                             best = reader.max_match
                             match_type = reader.name
-                            match_len = len(phrase)
+                            match_len = offset
                             if best == 1:
                                 break
                 if best == 1:
