@@ -46,6 +46,7 @@ class STSWikiReader:
         self.cur = None
         self.max_name_word_cnt = 0
         self.max_match = 0
+        self.FORCE_IGNORE_NAME = '~~FORCE~IGNORE~~'
 
         self.update_info()
 
@@ -183,9 +184,9 @@ class STSWikiReader:
             self.update_info()
 
         if name.lower() in self.ignore_list:
-            self.cur = None
-            self.max_match = 0
-            return False
+            self.cur = self.FORCE_IGNORE_NAME
+            self.max_match = 1
+            return True
 
         res = name in self.real_names
         if res:
@@ -300,15 +301,15 @@ class RedditBot:
                 if best == 1:
                     break
             if cur is not None:
-                if not mentions:
-                    log(title)
-                print('{} Mention: {} | {:0.2f}'.format(
-                    match_type, cur, best))
-                if cur in mentions.keys():
-                    mentions[cur] = max(best*100,
-                                        mentions[cur])
-                else:
-                    mentions[cur] = best*100
+                if cur != reader.FORCE_IGNORE_NAME:
+                    if not mentions:
+                        log(title)
+                    print('{} Mention: {} | {:0.2f}'.format(
+                        match_type, cur, best))
+                    if cur in mentions.keys():
+                        mentions[cur] = max(best*100, mentions[cur])
+                    else:
+                        mentions[cur] = best*100
                 skip = match_len-1
 
         if mentions:
@@ -408,11 +409,11 @@ if __name__ == '__main__':
     redditbot = RedditBot([RelicReader, CardReader])
     redditbot.start()
 
-    # ##FOR TESTING#######################
-    #
-    # class tempPost:
-    #    def __init__(self, title, _id):
-    #        self.title = title
-    #        self.id = _id
-    # redditbot.process_submission(tempPost(
-    #    'My greatest Slay the Spire pro-play so far /s', '2'))
+    # FOR TESTING
+    if False:
+        class tempPost:
+            def __init__(self, title, _id):
+                self.title = title
+                self.id = _id
+        redditbot.process_submission(tempPost(
+           'Killed the Slime boss in one turn!', '4'))
