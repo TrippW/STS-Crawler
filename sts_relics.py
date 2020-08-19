@@ -90,13 +90,22 @@ class STSWikiReader:
             name = name[:pos] + name[pos+1:]
         return name
 
+    def _rm_article_at_start(self, name):
+        articles = ['the', 'a', 'an']
+        test_name = name.lower()
+        for article in articles:
+            if test_name.startswith(article + ' '):
+                return name[len(article) + 1:]
+        return name
+
     def _gen_alternative_names(self, name):
         """creates a massive list of possible mistypes for a
             specific name, used as an aid for matching user input
         """
         names = set()
         actions = [self._rm_symbol, self._rm_squote, self._lower,
-                   self._rm_hyph, self._rm_beta, self._append_s]
+                   self._rm_article_at_start, self._rm_hyph, self._rm_beta,
+                   self._append_s]
         # Weird edge case for beta tag on wiki vs beta the card
         if name.lower().strip() == 'beta':
             actions.remove(self._rm_beta)
@@ -426,4 +435,4 @@ if __name__ == '__main__':
                 self.title = title
                 self.id = _id
         redditbot.process_submission(tempPost(
-           'Killed the Slime boss in one turn!', '4'))
+           'Insane courier combo with "membership card!"', '4'))
