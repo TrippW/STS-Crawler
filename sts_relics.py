@@ -52,13 +52,14 @@ class STSWikiReader:
 
     def format_name(self, name):
         """Used to get a clean, uniform name with pesky characters removed"""
-        return self._rm_symbol(self._rm_squote(self._rm_hyph(name.lower())))
+        return self._rm_double_space(self._rm_symbol(self._rm_squote(
+            self._rm_hyph(name.lower()))))
 
     def _rm_symbol(self, name):
         """removes odd characters that should never be in a obj name"""
-        return name.replace('?', '').replace(',', '').replace('.', '') \
-            .replace('!', '').replace('(', '').replace(')', '') \
-            .replace(':', '')
+        return name.replace('?', ' ').replace(',', ' ').replace('.', ' ') \
+            .replace('!', ' ').replace('(', ' ').replace(')', ' ') \
+            .replace(':', ' ').replace('"', ' ')
 
     def _rm_squote(self, name):
         """removes single quotes"""
@@ -78,8 +79,16 @@ class STSWikiReader:
             .replace('Beta', '').replace('beta', '')
 
     def _append_s(self, name):
-        """makes things plural"""
+        """makes things plural
+            (simple method prone to error, but will do for now)
+        """
         return f'{name}s'
+
+    def _rm_double_space(self, name):
+        while '  ' in name:
+            pos = name.find('  ')
+            name = name[:pos] + name[pos+1:]
+        return name
 
     def _gen_alternative_names(self, name):
         """creates a massive list of possible mistypes for a
@@ -95,7 +104,8 @@ class STSWikiReader:
         for outer in range(len(actions)):
             temp_name = name
             for inner in range(len(actions) - outer):
-                temp_name = actions[outer+inner](temp_name)
+                temp_name = self._rm_double_space(
+                    actions[outer+inner](temp_name))
                 names.add(temp_name)
         return list(names)
 
