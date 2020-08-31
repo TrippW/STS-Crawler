@@ -250,10 +250,11 @@ class RedditBot:
 
     def start(self):
         """starts the bot, runs forever"""
+        self.last_update = datetime.datetime.utcnow()
         while True:
             log('Starting up...')
             try:
-                if False and datetime.datetime.utcnow() - self.last_update \
+                if datetime.datetime.utcnow() - self.last_update \
                         > datetime.timedelta(days=1):
                     self.update_ignore_files()
                 for post in self.SUBREDDIT.stream.submissions():
@@ -270,11 +271,11 @@ class RedditBot:
         for reader in self.readers:
             f_ignore_name = f'{reader.name}.ignore'
             f_links_name = f'{reader.name}.link'
-            if os.path.exists(fname):
+            if os.path.exists(f_ignore_name):
                 with open(f_ignore_name, 'r') as f:
                     reader.ignore_list = [k.strip().lower()
                                           for k in f.readlines()]
-                with open(f_link_name, 'r') as f:
+                with open(f_links_name, 'r') as f:
                     reader.links = [k.strip() for k in f.readlines()]
             else:
                 reader.ignore_list = []
