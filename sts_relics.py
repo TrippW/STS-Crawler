@@ -340,9 +340,12 @@ class RedditBot:
         """formats and posts the data to reddit"""
         reply = ""
         grouped_items = dict()
+        abo = ['Alpha', 'Beta', 'Omega']
         # group by percent
         for key in items:
             k = int(items[key]*10)
+            if key in abo:
+                abo.remove(key)
             if k not in grouped_items.keys():
                 grouped_items[k] = [key]
             else:
@@ -361,6 +364,12 @@ class RedditBot:
                 item_list += ' and ' + f'[[{values[-1]}]]'
                 reply += template.format(key/10, item_list) + self.NEW_LINE
             template = self.REPLY_TEMPLATE
+
+        if len(abo) % 3 != 0:
+            reply += f'You may also be interested in [[{abo[0]}]]'
+            if len(abo) == 2:
+                reply += f' and [[{abo[1]}]]'
+            reply += '.' + self.NEW_LINE
 
         log(reply)
 
