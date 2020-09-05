@@ -256,7 +256,7 @@ class RedditBot:
             log('Starting up...')
             try:
                 if datetime.datetime.utcnow() - self.last_update \
-                        > datetime.timedelta(days=1):
+                        >= datetime.timedelta(days=1):
                     self.update_ignore_files()
                 for post in self.SUBREDDIT.stream.submissions():
                     self.process_submission(post)
@@ -281,6 +281,7 @@ class RedditBot:
             else:
                 reader.ignore_list = []
                 reader.links = []
+            reader.last_update = datetime.datetime.utcnow()
 
         self.last_update = datetime.datetime.utcnow()
 
