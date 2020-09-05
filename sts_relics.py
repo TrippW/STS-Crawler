@@ -59,7 +59,8 @@ class STSWikiReader:
         """removes odd characters that should never be in a obj name"""
         return name.replace('?', ' ').replace(',', ' ').replace('.', ' ') \
             .replace('!', ' ').replace('(', ' ').replace(')', ' ') \
-            .replace(':', ' ').replace('"', ' ').replace('+', ' ')
+            .replace(':', ' ').replace('"', ' ').replace('+', ' ') \
+            .replace('[', ' ').replace(']', ' ')
 
     def _rm_squote(self, name):
         """removes single quotes"""
