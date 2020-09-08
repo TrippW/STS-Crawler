@@ -255,10 +255,11 @@ class RedditBot:
         while True:
             log('Starting up...')
             try:
-                if datetime.datetime.utcnow() - self.last_update \
-                        >= datetime.timedelta(days=1):
-                    self.update_ignore_files()
                 for post in self.SUBREDDIT.stream.submissions():
+                    if datetime.datetime.utcnow() - self.last_update \
+                            >= datetime.timedelta(days=1):
+                        self.update_ignore_files()
+
                     self.process_submission(post)
 
             except Exception as e:
@@ -312,7 +313,7 @@ class RedditBot:
                     continue
                 phrase = ' '.join(words[word_pos:word_pos+offset])
                 for reader in self.readers:
-                    if reader.check_if_exists(phrase, False):
+                    if reader.check_if_exists(phrase):
                         if reader.max_match > best:
                             cur = reader.cur
                             best = reader.max_match
