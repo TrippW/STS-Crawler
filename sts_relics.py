@@ -13,12 +13,6 @@ from bs4 import BeautifulSoup as soup
 from urllib3.exceptions import InsecureRequestWarning
 from strsimpy.jaro_winkler import JaroWinkler
 
-RELIC_IGNORE = ['Relics']
-RELIC_LINKS = [
-    'https://slay-the-spire.fandom.com/wiki/Category:Relic',
-    'https://slay-the-spire.fandom.com/wiki/Category:Beta_Relic'
-]
-
 
 def log(text):
     """helper to log to file and print at the same time"""
