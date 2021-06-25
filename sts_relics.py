@@ -8,11 +8,17 @@ import praw
 import prawcore
 import datetime
 import os
+import traceback
+
+from STSTypes import *
 from time import sleep
 from bs4 import BeautifulSoup as soup
 from urllib3.exceptions import InsecureRequestWarning
 from strsimpy.jaro_winkler import JaroWinkler
 
+sts_descr_site = 'http://127.0.0.1:5000/'
+describe_path = 'describe'
+update_path = 'update'
 
 def log(text):
     """helper to log to file and print at the same time"""
@@ -227,7 +233,7 @@ class RedditBot:
                                     + '{} in your post.'
         self.REPLY_TEMPLATE = 'I am also {:0.1f}% confident you mentioned {}.'
 
-        self.END_TEXT = 'Let me call the bot for you.' + \
+        self.END_TEXT = 'Let me look up what those do.' + \
                         self.NEW_LINE + '-'*50 + \
                         self.NEW_LINE + "I am a bot response, but " + \
                         "I am using my creator's account. " + \
@@ -252,12 +258,14 @@ class RedditBot:
                 for post in self.SUBREDDIT.stream.submissions():
                     if datetime.datetime.utcnow() - self.last_update \
                             >= datetime.timedelta(days=1):
+                        requests.get(sts_descr_site+update_path)
                         self.update_ignore_files()
 
                     self.process_submission(post)
 
             except Exception as e:
                 log(str(e))
+                traceback.print_stack(e)
                 sleep(60)
 
     def update_ignore_files(self):
@@ -338,6 +346,7 @@ class RedditBot:
         reply = ""
         grouped_items = dict()
         abo = ['Alpha', 'Beta', 'Omega']
+        names = []
         # group by percent
         for key in items:
             k = int(items[key]*10)
@@ -350,22 +359,25 @@ class RedditBot:
         template = self.FIRST_REPLY_TEMPLATE
         for key in sorted(grouped_items, reverse=True):
             values = grouped_items[key]
+            names.extend(values)
             if len(values) == 1:
-                reply += template.format(key/10, f'[[{values[0]}]]') + \
+                reply += template.format(key/10, f'{values[0]}') + \
                          self.NEW_LINE
             else:
-                item_list = ', '.join([f'[[{k}]]' for k in values[:-1]])
+                item_list = ', '.join([f'{k}' for k in values[:-1]])
                 # oxford comma
                 if len(values) != 2:
                     item_list += ','
-                item_list += ' and ' + f'[[{values[-1]}]]'
+                item_list += ' and ' + f'{values[-1]}'
                 reply += template.format(key/10, item_list) + self.NEW_LINE
             template = self.REPLY_TEMPLATE
 
         if len(abo) % 3 != 0:
-            reply += f'You may also be interested in [[{abo[0]}]]'
+            names.append(abo[0])
+            reply += f'You may also be interested in {abo[0]}'
             if len(abo) == 2:
-                reply += f' and [[{abo[1]}]]'
+                names.append(abo[1])
+                reply += f' and {abo[1]}'
             reply += '.' + self.NEW_LINE
 
         log(reply)
@@ -379,8 +391,29 @@ class RedditBot:
                 f' {reader.last_update}')
         # ## END DEBUG# ##
         reply += self.END_TEXT
-        self.post.reply(reply)
+        try:
+            res = requests.post(sts_descr_site+describe_path, json={'names':names})
+        except requests.exceptions.HTTPError as e:
+            log('Unable to get name descriptions')
+            log(e.response.text)
+            raise
+        entries = [WikiEntry(**entry) for entry in res.json()['entries']]        
 
+        cur_post = self.post.reply(reply)
+
+        reply = ''
+        reply_cnt = 0
+        for entry in entries:
+            reply_cnt += 1
+            reply += entry.descr() + '\n\n'
+            if reply_cnt == 10:
+                log('posting next reply')
+                cur_post.reply(reply)
+                reply_cnt = 0
+
+        if reply_cnt != 0:
+            log('posting next reply')
+            cur_post.reply(reply)
     def process_submission(self, post):
         """handles input of new posts to the subreddit"""
         global checked_ids
