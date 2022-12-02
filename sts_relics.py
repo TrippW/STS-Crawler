@@ -233,13 +233,15 @@ class RedditBot:
                                     + '{} in your post.'
         self.REPLY_TEMPLATE = 'I am also {:0.1f}% confident you mentioned {}.'
 
-        self.END_TEXT = 'Let me look up what those do.' + \
-                        self.NEW_LINE + '-'*50 + \
-                        self.NEW_LINE + "I am a bot response, but " + \
+        shrinker = '^^^'
+        self.END_TEXT = "I am a bot response, but " + \
                         "I am using my creator's account. " + \
                         'Please reply to me if I got something wrong ' + \
-                        'so he can fix it.' + self.NEW_LINE + \
-                        '[Source Code](https://github.com/TrippW/STS-Crawler)'
+                        'so he can fix it.'
+        self.END_TEXT = self.NEW_LINE + '-'*50 + self.NEW_LINE + \
+            shrinker + self.END_TEXT.replace(' ', f' {shrinker}')
+        self.END_TEXT += self.NEW_LINE + \
+                        f'[{shrinker}Source {shrinker}Code](https://github.com/TrippW/STS-Crawler)'
 
     def login(self):
         """
@@ -389,31 +391,42 @@ class RedditBot:
         for reader in self.readers:
             log(f'last time {reader.name} reader was updated:' +
                 f' {reader.last_update}')
-        # ## END DEBUG# ##
-        reply += self.END_TEXT
+        # ## END DEBUG# ## + \
+        end = self.NEW_LINE + \
+            self.NEW_LINE + \
+            self.END_TEXT
+        reply += self.NEW_LINE + '-'*50 + self.NEW_LINE
         try:
             res = requests.post(sts_descr_site+describe_path, json={'names':names})
         except requests.exceptions.HTTPError as e:
             log('Unable to get name descriptions')
             log(e.response.text)
             raise
-        entries = [WikiEntry(**entry) for entry in res.json()['entries']]        
+        entries = [WikiEntry(**entry) for entry in res.json()['entries']]
 
-        cur_post = self.post.reply(reply)
+        cur_post = self.post
 
-        reply = ''
         reply_cnt = 0
         for entry in entries:
             reply_cnt += 1
-            reply += entry.descr() + '\n\n'
-            if reply_cnt == 10:
+            reply += entry.descr()
+            if len(reply) >= 8000:
                 log('posting next reply')
-                cur_post.reply(reply)
+                reply += end
+                cur_post = cur_post.reply(reply)
+                reply = ''
+                end = ''
                 reply_cnt = 0
+            else:
+                reply += '\n\n'
 
-        if reply_cnt != 0:
+        if reply:
             log('posting next reply')
-            cur_post.reply(reply)
+            reply += end
+            cur_post = cur_post.reply(reply)
+            reply = ''
+            end = ''
+
     def process_submission(self, post):
         """handles input of new posts to the subreddit"""
         global checked_ids
@@ -421,7 +434,7 @@ class RedditBot:
         self.post = post
 
         title = str(title).encode('utf-8', errors='ignore').decode('utf-8')
-        if (post.id not in checked_ids) and 'Daily Discussion' not in title:
+        if (post.id not in checked_ids) and 'daily discussion' not in title.lower():
             print(f'checking {post.id}')
             self.check_all_word_combos(title, self.post_reply)
             checked_ids.append(post.id)
@@ -475,4 +488,4 @@ if __name__ == '__main__':
                 self.title = title
                 self.id = _id
         redditbot.process_submission(tempPost(
-           'Insane courier combo with "membership card!"', '4'))
+           'Lets talk alpha and beta', '4'))

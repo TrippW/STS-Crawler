@@ -2,3 +2,5 @@
 praw.ini
 checked.txt
 sts_crawler.log
+*.pyc
+*.cache
